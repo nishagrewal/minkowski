@@ -37,7 +37,7 @@ def map_derivatives(m, pixelsize):
     return [dx,dy,dxx,dxy,dyy]
 
 
-def V_012(k, thr_ct, k_std, pixelsize):
+def V_012_flat(k, thr_ct, k_std, pixelsize):
 
     """
     Calculates the Minkowski Functionals (MF) V0, V1, and V2 for a 2D flat sky square map
