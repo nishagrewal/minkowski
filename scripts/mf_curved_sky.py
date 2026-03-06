@@ -1,44 +1,28 @@
 import healpy as hp
 import numpy as np
-import math
-import os
 
-
-''' Importing V12 function from C code ''' 
-# C imports
-import ctypes
-
-# define v12 funtion from C code
-lib = ctypes.cdll.LoadLibrary("./mf_c.so")
-calculate_v12_c = lib.calculate_v12
-c_double_p = ctypes.POINTER(ctypes.c_double)
-# int n, double * v, double * sq, double * frac, int nt, double vmin, double vspace, double * v1, double * v2
-
-# define type for each arguement
-calculate_v12_c.argtypes = [
-    ctypes.c_int,     # n
-    c_double_p,       # v
-    c_double_p,       # sq
-    c_double_p,       # frac
-    ctypes.c_int,     # nt
-    ctypes.c_double,  # vmin
-    ctypes.c_double,  # vspace
-    c_double_p,       # v1
-    c_double_p,       # v2 
-]
-
-# no output from the function - instead inputs are filled
-calculate_v12_c.restype = None
-
-
-
-''' Minkowski Functional Calculations '''
-
-# calculate pixel derivatives
 
 def map_derivatives(m):
     """
-    Compute the derivatives of a map
+    Compute first and second derivatives of a HEALPix map on the sphere.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        1D array of map values (pixel heights) in HEALPix ordering.
+
+    Returns
+    -------
+    der_theta : numpy.ndarray
+        First derivative of the map with respect to theta.
+    der_phi : numpy.ndarray
+        First derivative of the map with respect to phi.
+    der2_theta2 : numpy.ndarray
+        Second derivative with respect to theta.
+    der2_phi2 : numpy.ndarray
+        Second derivative with respect to phi.
+    der2_theta_phi : numpy.ndarray
+        Mixed second derivative with respect to theta and phi.
     """
     npix = m.size
     nside = hp.npix2nside(npix)
@@ -61,49 +45,53 @@ def map_derivatives(m):
     return [der_theta_map, der_phi_map, der2_theta2_map, der2_phi2_map, der2_theta_phi_map]
 
 
-### MF functions
 
-def V_0(v,k):
+def V_012(v, k):
+    """
+    Calculate Minkowski Functionals V0, V1, and V2 for a curved sky healpy map.
 
-    output = []
-    for i in v:
+    Parameters
+    ----------
+    v : numpy.ndarray
+        1D array of threshold values. These define the levels at which the functionals are evaluated.
+    k : numpy.ndarray
+        1D array of map values (pixel heights).
 
-        # find the counts of pixels where the pixel height is greater than that threshold value
-        count = (k > i).sum()
-        output = np.append(output,count)
+    Returns
+    -------
+    V0 : numpy.ndarray
+        Cumulative fraction of pixels above each threshold (normalised).
+    V1 : numpy.ndarray
+        Perimeter-related Minkowski functional (normalised).
+    V2 : numpy.ndarray
+        Curvature-related Minkowski functional (normalised).
+    """
+
+    # calculate first and second derivatives
+    dx, dy, dxx, dyy, dxy = map_derivatives(k)
     
-    # divide by pixel count
-    output = output/(k.size)   
-    return output
-
-
-def V_12(v,k,kx,ky,kxx,kxy,kyy):
+    # compute per-pixel quantities for V1 and V2
+    sq = np.sqrt(dx**2 + dy**2)
+    grad2 = dx**2 + dy**2
+    grad2[grad2 == 0] = 1e-16  # avoid division by zero
+    frac = (2*dx*dy*dxy - (dx**2)*dyy - (dy**2)*dxx) / grad2
+        
+    # linear binning based on thresholds
+    vmin = v.min()                                  
+    vmax = v.max()  
+    thr_ct = len(v)                     
+    vspace = (vmax - vmin) / (thr_ct - 1)
+    indices = np.floor((k - vmin) / vspace)     
+    valid = (indices >= 0) & (indices < thr_ct)
     
-    vmin = v.min()                      # threshold min
-    vmax = v.max()                      # threshold max
-    vspace = (vmax-vmin)/len(v)         # threshold array bin size
-    N = k.size                          # pixel count
-    nt = v.size                         # threshold count
+    # sum V1 and V2 per threshold
+    V1 = np.bincount(indices[valid].astype(int), weights=sq[valid], minlength=thr_ct)
+    V2 = np.bincount(indices[valid].astype(int), weights=frac[valid], minlength=thr_ct)
 
-    output1 = np.zeros(len(v))
-    output2 = np.zeros(len(v))
-  
-    # define MF functions
-    sq = np.sqrt(kx**2 + ky**2)
-    frac = (2*kx*ky*kxy - (kx**2)*kyy - (ky**2)*kxx)/(kx**2 + ky**2)
+    # normalise
+    V0 = (k[None, :] > v[:, None]).sum(axis=1) / k.size
+    V1 = V1 / (4 * k.size)
+    V2 = V2 / (2 * np.pi * k.size)
     
-    # use C function to calculate V1 and V2 (using only the values of the objects)
-    calculate_v12_c(N, 
-                    k.ctypes.data_as(c_double_p),
-                    sq.ctypes.data_as(c_double_p),
-                    frac.ctypes.data_as(c_double_p),
-                    nt,
-                    vmin,
-                    vspace,
-                    output1.ctypes.data_as(c_double_p),
-                    output2.ctypes.data_as(c_double_p),
-    )
+    return V0, V1, V2
 
-    output1 = output1 / (4*N)
-    output2 = output2 / (2*np.pi*N)    
-    return output1,output2
