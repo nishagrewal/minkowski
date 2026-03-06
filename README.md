@@ -6,7 +6,7 @@ Minkowski functional code for flat or curved sky maps
 * Sample usage in example notebook
 
 
-To run C++ script on nersc:
+To compile C++ script on nersc:
 ```
 g++ -O3 -Wall -shared -std=c++17 -fPIC $(python -m pybind11 --includes) minkowski.cc -o minkowski$(python3-config --extension-suffix) $(python3-config --ldflags)
 ```
