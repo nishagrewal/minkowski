@@ -32,15 +32,15 @@ def map_derivatives(m, pixelsize):
     
     # caluclate second derivatives
     dxx,dxy = np.gradient(dx, pixelsize, axis = (0,1))
-    dyy = np.gradient(dy,pixelsize,axis=1)
+    dyy = np.gradient(dy, pixelsize,axis=1)
     
     return [dx,dy,dxx,dxy,dyy]
 
 
-def V_012(k, thr_ct, k_std, pixelsize, t_min=-3, t_max=3):
+def V_012(k, thr_ct, k_std, pixelsize):
 
     """
-    Calculates the Minkowski Functionals (MF) V0, V1, and V2 for a 2D map
+    Calculates the Minkowski Functionals (MF) V0, V1, and V2 for a 2D flat sky square map
 
     Parameters
     ----------
@@ -48,17 +48,17 @@ def V_012(k, thr_ct, k_std, pixelsize, t_min=-3, t_max=3):
         2D map to calculate MFs of
     thr_ct : int
         Number of threshold values to calculate
-    k_std : float
-        Standard deviation of the map (for an individual realisation or a cosmology)
-    t_min : float
-        Minimum threshold value
-    t_max : float
-        Maximum threshold value
+    pixelsize : float
+        Pixel size of the map in radians
     
     Returns
     -------
-    output : 1D numpy array
-        Concatenated array containing the Minkowski Functionals V0, V1, and V2
+    V0 : numpy.ndarray
+        Cumulative fraction of pixels above each threshold (normalised).
+    V1 : numpy.ndarray
+        Perimeter-related Minkowski functional (normalised).
+    V2 : numpy.ndarray
+        Curvature-related Minkowski functional (normalised).
     """
     
     # calculate derivatives
@@ -67,48 +67,29 @@ def V_012(k, thr_ct, k_std, pixelsize, t_min=-3, t_max=3):
     # define MF functions
     sq = np.sqrt(kx**2 + ky**2)
     frac = (2*kx*ky*kxy - (kx**2)*kyy - (ky**2)*kxx)/(kx**2 + ky**2)
-    
-    N = k.size                                                    # pixel count
-    v = np.linspace(t_min*k_std,t_max*k_std,thr_ct)               # threshold values (assumes maps are centered around 0)
-    vmin = v.min()                                                # threshold min
-    vmax = v.max()                                                # threshold max
-    vspace = (vmax-vmin)/thr_ct                                   # threshold array bin size
+        
+    # get threshold array bin siz
+    vmin = v.min()     
+    vmax = v.max()                           
+    vspace = (vmax - vmin) / (thr_ct - 1)            
 
-    output0 = np.zeros(thr_ct)          # V0
-    output1 = np.zeros(thr_ct)          # V1
-    output2 = np.zeros(thr_ct)          # V2
-    
-    ## V0 ##
-    for index,i in enumerate(v):
-
-        # find the counts of pixels where the pixel height is greater than that threshold value
-        output0[index] = (k > i).sum()
-    
-    # divide by pixel count
-    output0 = output0/N   
-
-    ## V1, V2 ##
-    
     # flatten arrays for MF calculation
     k = k.flatten()
     sq = sq.flatten()
     frac = frac.flatten()
 
     # get threshold bin index for each pixel
-    indices = np.floor((k-vmin)/vspace)
+    indices = np.floor((k - vmin) / vspace)     
+    valid = (indices >= 0) & (indices < thr_ct)
+    V1 = np.bincount(indices[valid].astype(int), weights=sq[valid], minlength=thr_ct)
+    V2 = np.bincount(indices[valid].astype(int), weights=frac[valid], minlength=thr_ct)
     
-    # find the closest threshold value for every pixel    
-    for i,index in enumerate(indices):
-        
-        # filter out values outside valid indeces        
-        if 0 <= index < thr_ct: 
-            output1[int(index)] += sq[int(i)]
-            output2[int(index)] += frac[int(i)] 
- 
-    output1 = output1 / (4*N)
-    output2 = output2 / (2*np.pi*N)
+    # normalise
+    V0 = (k[None, :] > v[:, None]).sum(axis=1) / k.size
+    V1 = V1 / (4 * k.size)
+    V2 = V2 / (2 * np.pi * k.size)
     
-    return np.concatenate((output0.flatten(),output1.flatten(),output2.flatten()))
+    return V0, V1, V2
 
 
 
