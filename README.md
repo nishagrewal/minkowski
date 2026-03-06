@@ -1,11 +1,9 @@
 # minkowski
 Minkowski functional code for flat or curved sky maps
 
-Clone repository 
-
-```
-git clone https://github.com/nishagrewal/minkowski
-```
+* Run on curved sky healpy maps with scripts/mf_curved_sky.py
+* Run on square flat sky patches with mf_flat_sky.py
+* Sample usage in example notebook
 
 
 To run C++ script on nersc:
