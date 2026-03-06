@@ -46,7 +46,7 @@ def map_derivatives(m):
 
 
 
-def V_012(v, k):
+def V_012_curved(v, k):
     """
     Calculate Minkowski Functionals V0, V1, and V2 for a curved sky healpy map.
 
@@ -94,4 +94,5 @@ def V_012(v, k):
     V2 = V2 / (2 * np.pi * k.size)
     
     return V0, V1, V2
+
 
